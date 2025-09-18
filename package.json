@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev -H 127.0.0.1 -p 3000",
-    "ssl": "local-ssl-proxy --source 24731 --target 3000 --cert certs/local.correios.com.br.pem --key certs/local.correios.com.br-key.pem"
+    "ssl": "local-ssl-proxy --source 24731 --target 3000 --cert certs/localhost.pem --key certs/localhost-key.pem"
   },
   "dependencies": {
     "fast-xml-parser": "^5.2.5",

@@ -37,7 +37,7 @@ function buildReturnUrl(req: NextRequest) {
 /** Monta a URL de logout do CAS com o parâmetro correto (url ou service) */
 function buildCasLogoutUrl(returnUrl: string) {
   if (!CAS_BASE_URL) return returnUrl;
-  const paramName = CAS_PARAM === "service" ? "service" : "url";
+  const paramName = "service";
   // Alguns CAS exigem whitelisting do returnUrl
   return `${CAS_BASE_URL.replace(/\/$/, "")}/logout?${paramName}=${encodeURIComponent(
     returnUrl
