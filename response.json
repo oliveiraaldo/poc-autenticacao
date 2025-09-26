@@ -1,0 +1,123 @@
+{
+   "serviceResponse": {
+      "authenticationSuccess": {
+         "user": "80117384",
+         "attributes": {
+            "credentialType": [
+               "UsernamePasswordCredential"
+            ],
+            "clientIpAddress": [
+               "10.0.57.7"
+            ],
+            "isFromNewLogin": [
+               false
+            ],
+            "authenticationDate": [
+               1.7585607730527937E9
+            ],
+            "authenticationMethod": [
+               "correiosnet"
+            ],
+            "jwt": [
+               "eyJhbGciOiJSUzI1NiJ9.eyJhbWJpZW50ZSI6IkRFU0VOVk9MVklNRU5UTyIsImlkIjoyNDczMSwicGZsIjoiUyIsImF1dGhvcml0aWVzIjpbIkNSSUFSX0NBUlJJTkhPIiwiVEVTVEUiLCJQVUJMSUNfTElTVEFSX0NBVEFMT0dPIl0sIm5vbWVzR3J1cG9zIjpbIkFETUlOSVNUUkFET1IgREUgU0lTVEVNQSIsIkFETUlOSVNUUkFET1IgREUgQUNFU1NPUyIsIkFETUlOSVNUUkFET1IgVEVDTklDTyJdLCJhcGkiOls2MzFdLCJkciI6IkNTIiwibWN1IjoiMDA0Mzk0MDUiLCJub21lTG90YWNhbyI6IkdFUiBTSVNUIEFQT0lPL0RFU0lHIiwibm9tZSI6IlRBSUdVQVJBIFBFRFJFSVJBIExPQk8iLCJpcCI6IjEwLjAuMTE2LjkyIiwic3ViIjoiODAxMTczODQiLCJpYXQiOjE3NTg1NjA5MjIsImlzcyI6ImNhcy1zZXJ2aWNlIiwiZXhwIjoxNzU4NTg5NzIyLCJqdGkiOiIzYTM5MGRkOC0zMjQ4LTRiOWQtYTRjMC1mYzU2ODljZDJhOTcifQ.dVJDWPE0Mv7bodKAnxtyOM4-UHVY5HFKsX6ufGtMN1py1yODZw4GDIqDwSRLu2MgKy-T2mzTPTOer1Kvue1jXrH6tOGcoI8CJsrMyIHzg1Yg30t2QguXoQDntcEvq7BiYGb4yzDIX5oP5os2WpYPNswr0FA98BvYrBbDo0vKgpvwqTxthCc2T3ws0P8GhhHUDfx4B0WjLvY8X1oZD_YWN4Ng452QVaT-F6yxJQd3o7QDezFPh0VZsWjFZYikMWRFKQtP5kA254DV2PmhWV0cYq88tUb-RfVG6nPNjR1GqKb4lWYGYPWPbSGJZkiarM60rKCGRzfwpTwN14pq2rF2pQ"
+            ],
+            "successfulAuthenticationHandlers": [
+               "correiosnet"
+            ],
+            "serverIpAddress": [
+               "10.216.137.95"
+            ],
+            "userAgent": [
+               "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:137.0) Gecko/20100101 Firefox/137.0"
+            ],
+            "longTermAuthenticationRequestTokenUsed": [
+               false
+            ],
+            "menus": [
+               [
+                  {
+                     "nome": "Demandas Planejadas",
+                     "subItens": [
+                        {
+                           "nome": "Listar Demandas",
+                           "location": "/dashboard/demandas-planejadas",
+                           "subItens": []
+                        },
+                        {
+                           "nome": "Importar Demandas",
+                           "location": "/dashboard/demandas-planejadas/importacao",
+                           "subItens": []
+                        }
+                     ]
+                  },
+                  {
+                     "nome": "Catálogo",
+                     "subItens": [
+                        {
+                           "nome": "Orgãos",
+                           "location": "/dashboard/orgaos",
+                           "subItens": []
+                        },
+                        {
+                           "nome": "Tipo Objeto",
+                           "location": "/dashboard/tipo-objeto",
+                           "subItens": []
+                        },
+                        {
+                           "nome": "Grupos",
+                           "location": "/dashboard/grupos",
+                           "subItens": []
+                        },
+                        {
+                           "nome": "Criterio Julgamento",
+                           "location": "/dashboard/criterio-julgamento",
+                           "subItens": []
+                        },
+                        {
+                           "nome": "Familias",
+                           "location": "/dashboard/familias",
+                           "subItens": []
+                        },
+                        {
+                           "nome": "Catálogo de Itens",
+                           "location": "/dashboard/documentacao-tecnica",
+                           "subItens": []
+                        },
+                        {
+                           "nome": "Nova documentação técnica",
+                           "location": "/dashboard/documentacao-tecnica/cadastrar",
+                           "subItens": []
+                        },
+                        {
+                           "nome": "Histórico",
+                           "location": "/dashboard/documentacao-tecnica/historico",
+                           "subItens": []
+                        }
+                     ]
+                  },
+                  {
+                     "nome": "Carrinhos",
+                     "subItens": [
+                        {
+                           "nome": "Listar Carrinhos",
+                           "location": "/dashboard/carrinhos",
+                           "subItens": []
+                        }
+                     ]
+                  },
+                  {
+                     "nome": "Fase Interna",
+                     "subItens": [
+                        {
+                           "nome": "Instruir fase interna",
+                           "location": "/dashboard/fase-interna",
+                           "subItens": []
+                        }
+                     ]
+                  }
+               ]
+            ]
+         }
+      }
+   }
+}

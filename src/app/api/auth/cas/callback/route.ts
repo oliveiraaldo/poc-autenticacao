@@ -8,7 +8,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { SignJWT } from "jose";
-import { XMLParser } from "fast-xml-parser";
+
 
 // Função para obter a chave secreta para assinar JWTs
 function secret() {
@@ -18,26 +18,36 @@ function secret() {
 }
 
 /** Valida ticket no servidor CAS - Tenta p3 (versão mais nova) e depois p2 (versão antiga) */
-async function fetchValidate(base: string, service: string, ticket: string) {
+async function fetchValidate(
+  base: string,
+  service: string,
+  ticket: string
+): Promise<{
+  ok: boolean;
+  json: Record<string, any>;
+  tried: string[];
+  status: number;
+}> {
   // URLs de validação CAS: primeiro tenta p3 (mais recursos), depois p2 (básico)
   const urls = [
-    `${base}/p3/serviceValidate?service=${encodeURIComponent(service)}&ticket=${encodeURIComponent(ticket)}`,
-    `${base}/serviceValidate?service=${encodeURIComponent(service)}&ticket=${encodeURIComponent(ticket)}`
+    `${base}/p3/serviceValidate?service=${encodeURIComponent(service)}&ticket=${encodeURIComponent(ticket)}&format=json`,
+    //`${base}/serviceValidate?service=${encodeURIComponent(service)}&ticket=${encodeURIComponent(ticket)}`
   ];
-  let lastStatus = 0, lastText = "";
+  let lastStatus = 0, lastText: Record<string, any> = {};
   
   // Tenta cada URL até encontrar uma que funcione
   for (const u of urls) {
     const r = await fetch(u, { cache: "no-store" }); // Sem cache para garantir validação fresca
     lastStatus = r.status;
-    lastText = await r.text();
-    if (r.ok) return { ok: true, xml: lastText, tried: urls, status: r.status };
+    lastText = await r.json();
+    if (r.ok) return { ok: true, json: lastText, tried: urls, status: r.status };
   }
-  return { ok: false, xml: lastText, tried: urls, status: lastStatus };
+  return { ok: false, json: lastText, tried: urls, status: lastStatus };
 }
 
 // Função principal do callback - processada quando o CAS redireciona de volta
 export async function GET(req: NextRequest) {
+  console.log("Iniciando callback de autenticação CAS...");
   const url = new URL(req.url);
   const ticket = url.searchParams.get("ticket"); // Ticket de autenticação do CAS
   const debug = url.searchParams.get("debug") === "1"; // Modo debug para mostrar detalhes extras
@@ -72,20 +82,15 @@ export async function GET(req: NextRequest) {
           status: validation.status,
           tried: validation.tried,
           hint: "Cheque se SERVICE_URL (protocolo/host/porta) bate com o usado no login e o cadastrado no CAS.",
-          xml: debug ? validation.xml : undefined
+          json: debug ? validation.json : undefined
         },
         { status: 502 }
       );
     }
-
-    // Parser XML para processar a resposta do CAS
-    const parser = new XMLParser({ ignoreAttributes: false, removeNSPrefix: false });
-    const data = parser.parse(validation.xml);
-
+    const data = validation.json['serviceResponse'];
     // Extrai dados de sucesso ou falha da resposta CAS
-    const success = data?.["cas:serviceResponse"]?.["cas:authenticationSuccess"];
-    const failure = data?.["cas:serviceResponse"]?.["cas:authenticationFailure"];
-
+    const success = data?.authenticationSuccess
+    const failure = data?.authenticationFailure;
     if (!success) {
       return NextResponse.json(
         {
@@ -93,43 +98,46 @@ export async function GET(req: NextRequest) {
           code: failure?.["@_code"] ?? null,
           message: failure?.["#text"] ?? "Falha na autenticação CAS",
           hint: "Se o code for INVALID_SERVICE, o protocolo (http/https), host ou porta do SERVICE_URL não batem.",
-          xml: debug ? validation.xml : undefined
+          json: debug ? validation : undefined
         },
         { status: 401 }
       );
     }
 
     // Extrai dados do usuário e atributos da resposta CAS
-    const user = success["cas:user"]; // ID do usuário
-    const raw = success["cas:attributes"] || {}; // Atributos brutos
-    const attrs: Record<string, any> = {};
-    
-    // Remove prefixos "cas:" dos nomes dos atributos para facilitar uso
-    for (const [k, v] of Object.entries(raw)) attrs[k.replace(/^cas:/, "")] = v;
+    const user = success["user"]; // ID do usuário
+    //console.log('Usuário autenticado com sucesso no CAS:', user);
+    const rawAttrs = success["attributes"] || {}; // Atributos brutos
+    //const attrs: Record<string, any> = {};      
 
-    // Decodifica o JWT interno do CAS (se existir) para obter dados mais ricos
+  const attrs = Object.fromEntries(
+  Object.entries(rawAttrs).map(([k, v]) => [k, Array.isArray(v) && v.length === 1 ? v[0] : v])
+);
+
     let casJwtData = null;
-    if (attrs.jwt) {
-      try {
+    if (attrs.jwt) {      
         const parts = attrs.jwt.split('.'); // JWT tem 3 partes: header.payload.signature
+        //console.log('JWT do CAS encontrado nos atributos, decodificando...', attrs.jwt);
         if (parts.length === 3) {
           // Decodifica apenas o payload (segunda parte) - contém os dados do usuário
           const base64Payload = parts[1];
-          const jsonPayload = Buffer.from(base64Payload, 'base64url').toString('utf8');
-          casJwtData = JSON.parse(jsonPayload);
+          const jsonPayload = Buffer.from(base64Payload, 'base64url').toString('utf8');          
+          casJwtData = JSON.parse(jsonPayload);                    
+          //console.log('Dados decodificados do JWT do CAS:', casJwtData);
+        }else{
+          console.log('Formato do JWT do CAS inválido, esperado 3 partes separadas por pontos.');  
         }
-      } catch (e) {
-        console.error('Erro ao decodificar JWT do CAS:', e);
-      }
     }
 
-    // Monta o payload do nosso JWT local com os melhores dados disponíveis
-    const payload = {
+    // Monta o payload do nosso JWT local com os melhores dados disponíveis    
+    const {menus,...rest} = attrs
+      const payload = {
       sub: String(user), // ID do usuário
       name: casJwtData?.nome ?? attrs.nome ?? attrs.displayName ?? attrs.cn ?? String(user), // Nome (prioriza JWT)
-      email: casJwtData?.email ?? attrs.email ?? attrs.mail ?? null, // Email (prioriza JWT)
-      attrs, // Todos os atributos originais do CAS
-      casJwtData // Dados decodificados do JWT do CAS (grupos, perfis, etc)
+      email: casJwtData?.email ?? attrs.email ?? attrs.mail ?? null, // Email (prioriza JWT),
+      ...rest  
+      //attrs, // Todos os atributos originais do CAS
+      //casJwtData // Dados decodificados do JWT do CAS (grupos, perfis, etc)
     };
 
     // Cria e assina nosso JWT local com validade de 8 horas
@@ -141,7 +149,7 @@ export async function GET(req: NextRequest) {
       .sign(secret()); // Assina com nossa chave secreta
 
     // Página HTML para exibir o token e dados
-    const html = `
+  const html = `
     <!DOCTYPE html>
     <html lang="pt-BR">
     <head>
@@ -269,6 +277,7 @@ export async function GET(req: NextRequest) {
       path: "/",         // Cookie válido para todo o site
       maxAge: 60 * 60 * 8 // 8 horas em segundos
     });
+    console.log('cookie definido:', AUTH_COOKIE_NAME);    
     return res;
 
   } catch (e: any) {

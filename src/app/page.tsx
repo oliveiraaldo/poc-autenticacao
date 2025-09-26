@@ -7,8 +7,11 @@ function secret() {
 
 async function getUser() {
   const name = process.env.AUTH_COOKIE_NAME || "pcon_token";
-  const store = await cookies();
+  console.log("Nome do cookie:", name); // Log do nome do cookie para depuração
+  if (!name) return null;
+  const store = await cookies();  
   const token = store.get(name)?.value;
+  console.log("Token do cookie:", token); // Log do token para depuração
   if (!token) return null;
   try {
     const { payload } = await jwtVerify(token, secret());
