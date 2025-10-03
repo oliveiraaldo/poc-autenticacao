@@ -3,15 +3,21 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "cross-env NODE_OPTIONS='--inspect' next dev -H 127.0.0.1 -p 3000",
-    "ssl": "local-ssl-proxy --source 24731 --target 3000 --cert certs/localhost.pem --key certs/localhost-key.pem"
+    "dev": "cross-env NODE_OPTIONS='--inspect' next dev -H 0.0.0.0 -p 3000",
+    "devVelho": "cross-env NODE_OPTIONS='--inspect' next dev -H 127.0.0.1 -p 3000",
+    "ssl": "local-ssl-proxy --source 24731 --target 3000 --cert certs/localhost.pem --key certs/localhost-key.pem",
+    "build": "next build",
+    "start": "next start -H 0.0.0.0"    
   },
   "dependencies": {
     "fast-xml-parser": "^5.2.5",
+    "ioredis": "^5.8.0",
     "jose": "^6.1.0",
     "next": "15.5.2",
+    "next-auth": "^5.0.0-beta.29",
     "react": "19.1.0",
-    "react-dom": "19.1.0"
+    "react-dom": "19.1.0",
+    "uuid": "^13.0.0"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

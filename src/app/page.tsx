@@ -2,7 +2,7 @@ import { cookies } from "next/headers";
 import { jwtVerify } from "jose";
 
 function secret() {
-  return new TextEncoder().encode(process.env.NEXT_AUTH_JWT_SECRET!);
+  return new TextEncoder().encode(process.env.NEXT_AUTH_JWT_SECRET);
 }
 
 async function getUser() {
@@ -61,7 +61,7 @@ export default async function HomePage() {
           </div>
         ) : (
           <div className="p-4 bg-yellow-100 rounded-lg">
-            <p>Usuário não autenticado. <a href="/api/auth/cas/login" className="text-blue-600 underline">Fazer login</a></p>
+            <p>Usuário não autenticado ainda. <a href="/api/auth/cas/login" className="text-blue-600 underline">Fazer login</a></p>
           </div>
         )}
       </div>

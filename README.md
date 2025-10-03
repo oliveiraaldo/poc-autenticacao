@@ -1,3 +1,10 @@
+
+### Link do projeto no GitHub:
+```html
+ https://github.com/oliveiraaldo/poc-autenticacao/tree/main
+ ```
+
+
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
 ## Getting Started
@@ -89,3 +96,50 @@ Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/bui
         https://localhost:24731
     ```    
 
+6. **Rodar usando os containers**
+
+```bash
+# Subir os containers de desenvolvimento
+docker-compose -f docker-compose.dev.yaml up
+
+# Parar os serviços
+docker-compose -f docker-compose.dev.yaml down
+
+# Reiniciar
+docker-compose -f docker-compose.dev.yaml restart
+
+```
+
+7. **Para acessar:**
+
+__Next.js diretamente:__ http://localhost:3000
+
+__Via Nginx (HTTPS):__ https://localhost:24731
+
+8.  **Teste as conexões:**
+
+```bash
+# Teste o Next.js diretamente
+curl http://localhost:3000
+
+# Teste via Nginx (HTTPS)
+curl -k https://localhost:24731
+```
+
+9. **Para desenvolvimento:**
+
+* Todas as alterações que você fizer no código serão refletidas automaticamente
+
+* O Hot Module Replacement (HMR) deve funcionar para atualizações em tempo real
+
+* O Redis está disponível para sessões/cache
+
+10. **Estrutura final que funcionou:**
+
+✅ Next.js rodando em 0.0.0.0 (acessível de outros containers)
+
+✅ Nginx com SSL funcionando na porta 24731
+
+✅ Redis para cache/sessões
+
+✅ Hot reload para desenvolvimento

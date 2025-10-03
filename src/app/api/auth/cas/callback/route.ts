@@ -8,6 +8,8 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { SignJWT } from "jose";
+import { randomUUID } from "crypto";
+import redis from '@/lib/redis'
 
 
 // Função para obter a chave secreta para assinar JWTs
@@ -34,7 +36,7 @@ async function fetchValidate(
     //`${base}/serviceValidate?service=${encodeURIComponent(service)}&ticket=${encodeURIComponent(ticket)}`
   ];
   let lastStatus = 0, lastText: Record<string, any> = {};
-  
+
   // Tenta cada URL até encontrar uma que funcione
   for (const u of urls) {
     const r = await fetch(u, { cache: "no-store" }); // Sem cache para garantir validação fresca
@@ -52,9 +54,6 @@ export async function GET(req: NextRequest) {
   const ticket = url.searchParams.get("ticket"); // Ticket de autenticação do CAS
   const debug = url.searchParams.get("debug") === "1"; // Modo debug para mostrar detalhes extras
 
-  // Helper para redirecionamento absoluto (Next 15 exige URL absoluta)
-  const redirectAbs = (path: string) => NextResponse.redirect(new URL(path, req.url));
-
   // Valida se o ticket foi fornecido
   if (!ticket) {
     return NextResponse.json({ error: "no_ticket" }, { status: 400 });
@@ -64,11 +63,14 @@ export async function GET(req: NextRequest) {
   const CAS_BASE_URL = process.env.CAS_BASE_URL; // URL base do servidor CAS
   const SERVICE_URL = process.env.SERVICE_URL;   // URL do nosso serviço (callback)
   const AUTH_COOKIE_NAME = process.env.AUTH_COOKIE_NAME || "pcon_token"; // Nome do cookie
+  const AUTH_COOKIE_MENU_NAME = process.env.AUTH_COOKIE_MENU_NAME || "pcon_menu"; // Nome do cookie
+
 
   if (!CAS_BASE_URL || !SERVICE_URL) {
     return NextResponse.json(
       { error: "env_missing", detail: "Defina CAS_BASE_URL e SERVICE_URL no .env.local e reinicie o dev server." },
       { status: 500 }
+
     );
   }
 
@@ -110,46 +112,74 @@ export async function GET(req: NextRequest) {
     const rawAttrs = success["attributes"] || {}; // Atributos brutos
     //const attrs: Record<string, any> = {};      
 
-  const attrs = Object.fromEntries(
-  Object.entries(rawAttrs).map(([k, v]) => [k, Array.isArray(v) && v.length === 1 ? v[0] : v])
-);
+    const attrs = Object.fromEntries(
+      Object.entries(rawAttrs).map(([k, v]) => [k, Array.isArray(v) && v.length === 1 ? v[0] : v])
+    );
 
     let casJwtData = null;
-    if (attrs.jwt) {      
-        const parts = attrs.jwt.split('.'); // JWT tem 3 partes: header.payload.signature
-        //console.log('JWT do CAS encontrado nos atributos, decodificando...', attrs.jwt);
-        if (parts.length === 3) {
-          // Decodifica apenas o payload (segunda parte) - contém os dados do usuário
-          const base64Payload = parts[1];
-          const jsonPayload = Buffer.from(base64Payload, 'base64url').toString('utf8');          
-          casJwtData = JSON.parse(jsonPayload);                    
-          //console.log('Dados decodificados do JWT do CAS:', casJwtData);
-        }else{
-          console.log('Formato do JWT do CAS inválido, esperado 3 partes separadas por pontos.');  
-        }
+    if (attrs.jwt) {
+      const parts = attrs.jwt.split('.'); // JWT tem 3 partes: header.payload.signature
+      //console.log('JWT do CAS encontrado nos atributos, decodificando...', attrs.jwt);
+      if (parts.length === 3) {
+        // Decodifica apenas o payload (segunda parte) - contém os dados do usuário
+        const base64Payload = parts[1];
+        const jsonPayload = Buffer.from(base64Payload, 'base64url').toString('utf8');
+        casJwtData = JSON.parse(jsonPayload);
+      }
+      else {
+        console.log('Formato do JWT do CAS inválido, esperado 3 partes separadas por pontos.');
+        return NextResponse.json('Erro ao decodificar JWT do CAS', { status: 500 });
+      }
     }
 
     // Monta o payload do nosso JWT local com os melhores dados disponíveis    
-    const {menus,...rest} = attrs
+    const { menus, jwt: jwtInterno, ...rest } = attrs
+    let jwtInternoData = null;
+    if (jwtInterno) {
+      const parts = jwtInterno.split('.'); // JWT tem 3 partes: header.payload.signature
+      //console.log('JWT do CAS encontrado nos atributos, decodificando...', attrs.jwt);
+      if (parts.length === 3) {
+        // Decodifica apenas o payload (segunda parte) - contém os dados do usuário
+        const base64Payload = parts[1];
+        const jsonPayload = Buffer.from(base64Payload, 'base64url').toString('utf8');
+        jwtInternoData = JSON.parse(jsonPayload);
+      }
+      else {
+        console.log('Formato do JWT interno do CAS inválido, esperado 3 partes separadas por pontos.');
+        return NextResponse.json('Erro ao decodificar JWT interno do CAS', { status: 500 });
+      }
+
+      const { nomesGrupos, mcu = null, nomeLotacao = null, dr = null } = jwtInternoData
+      const sessiosId = randomUUID();
+      await redis.set(`sessao:${sessiosId}`, JSON.stringify({ jwtInterno }), 'EX', 60 * 60 * 8); // Expira em 8 horas
+      const grupos = nomesGrupos || [];
+
       const payload = {
-      sub: String(user), // ID do usuário
-      name: casJwtData?.nome ?? attrs.nome ?? attrs.displayName ?? attrs.cn ?? String(user), // Nome (prioriza JWT)
-      email: casJwtData?.email ?? attrs.email ?? attrs.mail ?? null, // Email (prioriza JWT),
-      ...rest  
-      //attrs, // Todos os atributos originais do CAS
-      //casJwtData // Dados decodificados do JWT do CAS (grupos, perfis, etc)
-    };
+        sessiosId,
+        sub: String(user), // ID do usuário
+        name: casJwtData?.nome ?? attrs.nome ?? attrs.displayName ?? attrs.cn ?? String(user), // Nome (prioriza JWT)
+        email: casJwtData?.email ?? attrs.email ?? attrs.mail ?? null, // Email (prioriza JWT),
+        mcu, // Matricula
+        nomeLotacao,
+        dr,
+        grupos, // Grupos/Perfis (array),
+        // Outros atributos do CAS ficam disponíveis em payload.attrs no front-end
+        ...rest
+        //attrs, // Todos os atributos originais do CAS
+        //casJwtData // Dados decodificados do JWT do CAS (grupos, perfis, etc)
+      };
 
-    // Cria e assina nosso JWT local com validade de 8 horas
-    const token = await new SignJWT(payload)
-      .setProtectedHeader({ alg: "HS256" }) // Algoritmo de assinatura
-      .setSubject(String(user)) // Subject = ID do usuário
-      .setIssuedAt() // Data de emissão = agora
-      .setExpirationTime("8h") // Expira em 8 horas
-      .sign(secret()); // Assina com nossa chave secreta
 
-    // Página HTML para exibir o token e dados
-  const html = `
+      // Cria e assina nosso JWT local com validade de 8 horas
+      const token = await new SignJWT(payload)
+        .setProtectedHeader({ alg: "HS256" }) // Algoritmo de assinatura
+        .setSubject(String(user)) // Subject = ID do usuário
+        .setIssuedAt() // Data de emissão = agora
+        .setExpirationTime("8h") // Expira em 8 horas
+        .sign(secret()); // Assina com nossa chave secreta
+
+      // Página HTML para exibir o token e dados
+      const html = `
     <!DOCTYPE html>
     <html lang="pt-BR">
     <head>
@@ -224,13 +254,8 @@ export async function GET(req: NextRequest) {
             <h2>🔓 JWT do CAS Decodificado</h2>
             <div class="json" id="casjwtdata">${JSON.stringify(casJwtData, null, 2)}</div>
             <button class="copy-btn" onclick="copyToClipboard('casjwtdata')">Copiar JWT CAS Decodificado</button>
-            ` : ''}
+            ` : ''}           
             
-            ${debug ? `
-            <h2>🔍 Debug - XML Original</h2>
-            <div class="json" id="xmldata">${validation.xml}</div>
-            <button class="copy-btn" onclick="copyToClipboard('xmldata')">Copiar XML</button>
-            ` : ''}
             
             <div style="margin-top: 30px; padding: 15px; background: #d4edda; border-radius: 5px; color: #155724;">
                 <strong>✅ Cookie de autenticação definido com sucesso!</strong><br>
@@ -244,8 +269,7 @@ export async function GET(req: NextRequest) {
             console.log('🔑 TOKEN JWT:', ${JSON.stringify(token)});
             console.log('👤 DADOS DO USUÁRIO:', ${JSON.stringify(payload, null, 2)});
             console.log('🏛️ DADOS CAS ORIGINAIS:', ${JSON.stringify(attrs, null, 2)});
-            ${casJwtData ? `console.log('🔓 JWT CAS DECODIFICADO:', ${JSON.stringify(casJwtData, null, 2)});` : ''}
-            ${debug ? `console.log('🔍 XML ORIGINAL:', ${JSON.stringify(validation.xml)});` : ''}
+            ${casJwtData ? `console.log('🔓 JWT CAS DECODIFICADO:', ${JSON.stringify(casJwtData, null, 2)});` : ''}            
             console.log('==================================');
 
             function copyToClipboard(elementId) {
@@ -260,27 +284,38 @@ export async function GET(req: NextRequest) {
             }
         </script>
     </body>
-    </html>`;
+      </html>`;
 
-    // Cria resposta HTTP com a página HTML
-    const res = new NextResponse(html, {
-      headers: {
-        'Content-Type': 'text/html; charset=utf-8',
-      },
-    });
-    
-    // Define cookie seguro com o JWT para autenticação automática em próximas requisições
-    res.cookies.set(AUTH_COOKIE_NAME, token, {
-      httpOnly: true,    // Não acessível via JavaScript (segurança)
-      secure: true,      // Somente HTTPS
-      sameSite: "lax",   // Proteção CSRF
-      path: "/",         // Cookie válido para todo o site
-      maxAge: 60 * 60 * 8 // 8 horas em segundos
-    });
-    console.log('cookie definido:', AUTH_COOKIE_NAME);    
-    return res;
+      // Cria resposta HTTP com a página HTML
+      const res = new NextResponse(html, {
+        headers: {
+          'Content-Type': 'text/html; charset=utf-8',
+        },
+      });
+
+      // Define cookie seguro com o JWT para autenticação automática em próximas requisições
+      res.cookies.set(AUTH_COOKIE_NAME, token, {
+        httpOnly: true,    // Não acessível via JavaScript (segurança)
+        secure: true,      // Somente HTTPS
+        sameSite: "lax",   // Proteção CSRF
+        path: "/",         // Cookie válido para todo o site
+        maxAge: 60 * 60 * 8 // 8 horas em segundos
+      });
+      console.log('cookie definido:', AUTH_COOKIE_NAME);
+      res.cookies.set(AUTH_COOKIE_MENU_NAME, menus, {
+        httpOnly: true,    // Não acessível via JavaScript (segurança)
+        secure: true,      // Somente HTTPS
+        sameSite: "lax",   // Proteção CSRF
+        path: "/",         // Cookie válido para todo o site
+        maxAge: 60 * 60 * 8 // 8 horas em segundos
+      });
+      console.log('cookie do menu definido:', AUTH_COOKIE_MENU_NAME);
+
+     
+      return res;
+    }
 
   } catch (e: any) {
-    return NextResponse.json({ error: "callback_exception", message: String(e?.message ?? e) }, { status: 500 });
+      return NextResponse.json({ error: "callback_exception", message: String(e?.message ?? e) }, { status: 500 });
+    }
   }
-}

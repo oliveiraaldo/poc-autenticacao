@@ -1,5 +1,8 @@
 // app/api/auth/logout/route.ts
+import redis from "@/lib/redis";
 import { NextRequest, NextResponse } from "next/server";
+import { jwtVerify } from "jose";
+
 
 /**
  * ENV utilizadas:
@@ -9,23 +12,31 @@ import { NextRequest, NextResponse } from "next/server";
  * - CAS_LOGOUT_PARAM   (opcional: "url" | "service"; padrão "url")
  */
 
-const COOKIE_NAME = process.env.AUTH_COOKIE_NAME || "pcon_token";
+const AUTH_COOKIE_NAME = process.env.AUTH_COOKIE_NAME || "pcon_token";
+const AUTH_COOKIE_MENU_NAME = process.env.AUTH_COOKIE_NAME || "pcon_menu";
+const NEXT_AUTH_JWT_SECRET = process.env.NEXT_AUTH_JWT_SECRET
+
+function secret() {
+  return new TextEncoder().encode(process.env.NEXT_AUTH_JWT_SECRET);
+}
+
+
 const COOKIE_DOMAIN = process.env.COOKIE_DOMAIN; // ex.: "local.correios.com.br"
 const CAS_BASE_URL = process.env.CAS_BASE_URL;
-const CAS_PARAM = (process.env.CAS_LOGOUT_PARAM || "url").toLowerCase() as
-  | "url"
-  | "service";
 
 /** Descobre proto/host/porta respeitando proxy/reverse-proxy */
 function getBaseUrl(req: NextRequest) {
-  const proto =
-    req.headers.get("x-forwarded-proto") ??
-    (req.nextUrl.protocol.replace(":", "") || "https");
   const hostHeader =
-    req.headers.get("x-forwarded-host") ?? req.headers.get("host");
+    req.headers.get("referer") ?? req.headers.get("host");
+  
   // Fallback explícito ao seu host local com porta
-  const host = hostHeader ?? "local.correios.com.br:24731";
-  return `${proto}://${host}`;
+  //const host = hostHeader ?? "local.correios.com.br:24731";
+  const host = hostHeader ?? "https://localhost:24731";    
+
+  return `${host}`;
+
+
+  
 }
 
 /** URL para onde o usuário deve voltar após o logout (home por padrão) */
@@ -68,7 +79,7 @@ function clearAuthCookie(res: NextResponse, name: string) {
 }
 
 /** Implementação principal do logout */
-function handleLogout(req: NextRequest, doRedirect = true) {
+async function handleLogout(req: NextRequest, doRedirect = true) {
   const returnUrl = buildReturnUrl(req);
   const redirectTo = buildCasLogoutUrl(returnUrl);
 
@@ -76,10 +87,28 @@ function handleLogout(req: NextRequest, doRedirect = true) {
     ? NextResponse.redirect(redirectTo, { status: 302 })
     : NextResponse.json({ success: true, redirectTo });
 
-  clearAuthCookie(res, COOKIE_NAME);
+  const token = req.cookies.get(AUTH_COOKIE_NAME)?.value;
+  if (token) {
+    try {
+      const { payload } = await jwtVerify(token, secret());
+      const sessiosId = payload.sessiosId;      
+      if (sessiosId) {
+        const chave = `sessao:${typeof sessiosId === "string" ? sessiosId : JSON.stringify(sessiosId)}`;
+        console.log("Chave da sessão a ser removida do Redis:", chave);
+        const result = await redis.del(chave);
+        console.log("Resultado do redis.del:", result); // Deve ser 1 se apagou, 0 se não existia
+      }
+    } catch (e) {
+      console.error("Erro ao verificar token JWT durante logout:", e);
+      return NextResponse.json('Erro ao processar logout', { status: 500 });
+    }
+  }
+
+  clearAuthCookie(res, AUTH_COOKIE_NAME);
+  clearAuthCookie(res, AUTH_COOKIE_MENU_NAME);
+
   return res;
 }
-
 /** GET — ideal para <a href="/api/auth/logout">Logout</a> */
 export async function GET(req: NextRequest) {
   return handleLogout(req, true);
