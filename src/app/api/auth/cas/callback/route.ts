@@ -3,7 +3,7 @@
  * 
  * Este endpoint é chamado pelo servidor CAS após o usuário fazer login.
  * Recebe um ticket, valida no CAS, extrai dados do usuário,
- * decodifica JWT interno do CAS, cria JWT local e exibe página com resultados.
+ * decodifica JWT interno do CAS, cria JWT local e redireciona para a página inicial.
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -134,6 +134,9 @@ export async function GET(req: NextRequest) {
 
     // Monta o payload do nosso JWT local com os melhores dados disponíveis    
     const { menus, jwt: jwtInterno, ...rest } = attrs
+    console.log('🔍 DEBUG - Menu recebido dos atributos CAS:', menus);
+    console.log('🔍 DEBUG - Tipo do menu:', typeof menus);
+    console.log('🔍 DEBUG - Menu é array:', Array.isArray(menus));
     let jwtInternoData = null;
     if (jwtInterno) {
       const parts = jwtInterno.split('.'); // JWT tem 3 partes: header.payload.signature
@@ -169,6 +172,13 @@ export async function GET(req: NextRequest) {
         //casJwtData // Dados decodificados do JWT do CAS (grupos, perfis, etc)
       };
 
+      // Salva os dados do usuário no Redis para exibição posterior
+      await redis.set(`user_data:${sessiosId}`, JSON.stringify({
+        token: null, // Será preenchido após criar o token
+        payload,
+        attrs,
+        casJwtData
+      }), 'EX', 60 * 60 * 8); // Expira em 8 horas
 
       // Cria e assina nosso JWT local com validade de 8 horas
       const token = await new SignJWT(payload)
@@ -178,138 +188,39 @@ export async function GET(req: NextRequest) {
         .setExpirationTime("8h") // Expira em 8 horas
         .sign(secret()); // Assina com nossa chave secreta
 
-      // Página HTML para exibir o token e dados
-      const html = `
-    <!DOCTYPE html>
-    <html lang="pt-BR">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Autenticação CAS - Sucesso</title>
-        <style>
-            body {
-                font-family: 'Courier New', monospace;
-                margin: 20px;
-                background-color: #f5f5f5;
-            }
-            .container {
-                max-width: 1200px;
-                margin: 0 auto;
-                background: white;
-                padding: 20px;
-                border-radius: 8px;
-                box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            }
-            h1 { color: #28a745; }
-            h2 { color: #007bff; margin-top: 30px; }
-            .token {
-                background: #f8f9fa;
-                border: 1px solid #dee2e6;
-                padding: 15px;
-                border-radius: 5px;
-                word-break: break-all;
-                font-size: 12px;
-                color: #495057;
-            }
-            .json {
-                background: #f8f9fa;
-                border: 1px solid #dee2e6;
-                padding: 15px;
-                border-radius: 5px;
-                white-space: pre-wrap;
-                font-size: 14px;
-                overflow-x: auto;
-            }
-            .copy-btn {
-                background: #007bff;
-                color: white;
-                border: none;
-                padding: 8px 16px;
-                border-radius: 4px;
-                cursor: pointer;
-                margin-top: 10px;
-            }
-            .copy-btn:hover {
-                background: #0056b3;
-            }
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <h1>🎉 Autenticação CAS Realizada com Sucesso!</h1>
-            
-            <h2>🔑 Token JWT</h2>
-            <div class="token" id="token">${token}</div>
-            <button class="copy-btn" onclick="copyToClipboard('token')">Copiar Token</button>
-            
-            <h2>👤 Dados do Usuário (JSON Completo)</h2>
-            <div class="json" id="userdata">${JSON.stringify(payload, null, 2)}</div>
-            <button class="copy-btn" onclick="copyToClipboard('userdata')">Copiar JSON</button>
-            
-            <h2>🏛️ Dados CAS Originais</h2>
-            <div class="json" id="casdata">${JSON.stringify(attrs, null, 2)}</div>
-            <button class="copy-btn" onclick="copyToClipboard('casdata')">Copiar Dados CAS</button>
-            
-            ${casJwtData ? `
-            <h2>🔓 JWT do CAS Decodificado</h2>
-            <div class="json" id="casjwtdata">${JSON.stringify(casJwtData, null, 2)}</div>
-            <button class="copy-btn" onclick="copyToClipboard('casjwtdata')">Copiar JWT CAS Decodificado</button>
-            ` : ''}           
-            
-            
-            <div style="margin-top: 30px; padding: 15px; background: #d4edda; border-radius: 5px; color: #155724;">
-                <strong>✅ Cookie de autenticação definido com sucesso!</strong><br>
-                Você pode agora acessar <a href="/">a página inicial</a> para ver os dados carregados automaticamente.
-            </div>
-        </div>
-        
-        <script>
-            // Log dos dados no console
-            console.log('=== AUTENTICAÇÃO CAS COMPLETA ===');
-            console.log('🔑 TOKEN JWT:', ${JSON.stringify(token)});
-            console.log('👤 DADOS DO USUÁRIO:', ${JSON.stringify(payload, null, 2)});
-            console.log('🏛️ DADOS CAS ORIGINAIS:', ${JSON.stringify(attrs, null, 2)});
-            ${casJwtData ? `console.log('🔓 JWT CAS DECODIFICADO:', ${JSON.stringify(casJwtData, null, 2)});` : ''}            
-            console.log('==================================');
+      // Atualiza os dados no Redis com o token
+      await redis.set(`user_data:${sessiosId}`, JSON.stringify({
+        token,
+        payload,
+        attrs,
+        casJwtData
+      }), 'EX', 60 * 60 * 8); // Expira em 8 horas
 
-            function copyToClipboard(elementId) {
-                const element = document.getElementById(elementId);
-                const text = element.textContent;
-                navigator.clipboard.writeText(text).then(() => {
-                    alert('Copiado para a área de transferência!');
-                    console.log('✅ Copiado:', elementId);
-                }).catch(err => {
-                    console.error('❌ Erro ao copiar:', err);
-                });
-            }
-        </script>
-    </body>
-      </html>`;
-
-      // Cria resposta HTTP com a página HTML
-      const res = new NextResponse(html, {
-        headers: {
-          'Content-Type': 'text/html; charset=utf-8',
-        },
-      });
+      // Redireciona para a página inicial com sucesso
+      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:24731';
+      const res = NextResponse.redirect(new URL('/', baseUrl));
 
       // Define cookie seguro com o JWT para autenticação automática em próximas requisições
+      const isDevelopment = process.env.NODE_ENV === 'development';
       res.cookies.set(AUTH_COOKIE_NAME, token, {
         httpOnly: true,    // Não acessível via JavaScript (segurança)
-        secure: true,      // Somente HTTPS
+        secure: !isDevelopment,  // HTTPS apenas em produção
         sameSite: "lax",   // Proteção CSRF
         path: "/",         // Cookie válido para todo o site
         maxAge: 60 * 60 * 8 // 8 horas em segundos
       });
       console.log('cookie definido:', AUTH_COOKIE_NAME);
-      res.cookies.set(AUTH_COOKIE_MENU_NAME, menus, {
+      // Converte o menu para JSON string antes de salvar no cookie
+      const menuJson = JSON.stringify(menus);
+      res.cookies.set(AUTH_COOKIE_MENU_NAME, menuJson, {
         httpOnly: true,    // Não acessível via JavaScript (segurança)
-        secure: true,      // Somente HTTPS
+        secure: !isDevelopment,  // HTTPS apenas em produção
         sameSite: "lax",   // Proteção CSRF
         path: "/",         // Cookie válido para todo o site
         maxAge: 60 * 60 * 8 // 8 horas em segundos
       });
-      console.log('cookie do menu definido:', AUTH_COOKIE_MENU_NAME);
+      console.log('🔍 DEBUG - Cookie do menu definido:', AUTH_COOKIE_MENU_NAME);
+      console.log('🔍 DEBUG - Menu convertido para JSON:', menuJson);
 
      
       return res;

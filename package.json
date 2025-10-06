@@ -3,11 +3,11 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "cross-env NODE_OPTIONS='--inspect' next dev -H 0.0.0.0 -p 3000",
+    "dev": "cross-env NODE_ENV=development NODE_OPTIONS='--inspect' next dev -H 0.0.0.0 -p 24731",
     "devVelho": "cross-env NODE_OPTIONS='--inspect' next dev -H 127.0.0.1 -p 3000",
     "ssl": "local-ssl-proxy --source 24731 --target 3000 --cert certs/localhost.pem --key certs/localhost-key.pem",
     "build": "next build",
-    "start": "next start -H 0.0.0.0"    
+    "start": "next start -H 0.0.0.0"
   },
   "dependencies": {
     "fast-xml-parser": "^5.2.5",
