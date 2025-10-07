@@ -9,7 +9,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { SignJWT } from "jose";
 import { randomUUID } from "crypto";
-import redis from '@/lib/redis'
+import {redis} from '@/lib/redis'
 
 
 // Função para obter a chave secreta para assinar JWTs

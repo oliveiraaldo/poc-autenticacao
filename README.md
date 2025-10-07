@@ -100,13 +100,13 @@ Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/bui
 
 ```bash
 # Subir os containers de desenvolvimento
-docker-compose -f docker-compose.dev.yaml up
+docker-compose up
 
 # Parar os serviços
-docker-compose -f docker-compose.dev.yaml down
+docker-compose down
 
 # Reiniciar
-docker-compose -f docker-compose.dev.yaml restart
+docker-compose restart
 
 ```
 
